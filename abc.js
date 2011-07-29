@@ -10,7 +10,7 @@ var Stream = (function () {
     var tmp;
 
     constructor.prototype = {
-        length: function () {
+        remaining: function () {
             return this.bytes.length - this.pos;
         },
         readU8: function() {
@@ -402,37 +402,95 @@ function parseAbcFile(b) {
 
     // MethodInfos
     n = b.readU32();
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; ++i)
         methods.push(parseMethodInfo(b));
 
     // MetaDataInfos
     n = b.readU32();
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; ++i)
         metadata.push(parseMetadata(b));
 
     // InstanceInfos
     n = b.readU32();
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; ++i)
         instances.push(parseInstanceInfo(b));
 
     // ClassInfos
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; ++i)
         classes.push(parseClassInfo(b));
 
     // ScriptInfos
     n = b.readU32();
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; ++i)
         scripts.push(parseScriptInfo(b));
 
     // MethodBodies
     n = b.readU32();
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; ++i)
         methodBodies.push(parseMethodBody(b));
 
     return { constants: constants, methods: methods, metadata: metadata, instances: instances,
              classes: classes, scripts: scripts, methodBodies: methodBodies };
 }
 
-var bytes = snarf("tests/bitops-bits-in-byte.abc", "binary");
-parseAbcFile(new Stream(bytes));
+function compileAbc(abc) {
+    var methods = abc.methods;
+    var scripts = abc.scripts;
 
+    function resolve() {
+        // Attach method bodies to their respective methods.
+        var methodBodies = abc.methodBodies;
+        var n = methodBodies.length;
+        for (var i = 0; i < n; ++i) {
+            var mb = methodBodies[i];
+            methods[mb.method].body = mb;
+        }
+    }
+    function compileBody(body) {
+        var maxStack = body.maxStack;
+        var localCount = body.localCount;
+        var src = "";
+
+        src += "function (";
+        for (var i = 0; i < localCount; ++i)
+            src += ("L" + i + ((i + 1 < localCount) ? "," : ""));
+        src += ") {\n";
+        src += "var ";
+        for (var i = 0; i < maxStack; ++i)
+            src += ("S" + i + ((i + 1 < maxStack) ? "," : ""));
+        src += ";\n";
+
+        var sp = 0;
+        function push(def) {
+            src += ("S" + (sp++) + "=" + def + ";\n");
+        }
+        function pop(use) {
+            src += (use + "=S" + (--sp) + ";\n");
+        }
+
+        var stream = new Stream(body.code);
+        while (stream.remaining() > 0) {
+            var op = stream.readU8();
+            switch (op) {
+            case 0xD0: case 0xD1: case 0xD2: case 0xD3: // getlocalX
+                push("L" + (op - 0xD0));
+                break;
+            case 0xD4: case 0xD5: case 0xD6: case 0xD7: // setlocalX
+                pop("L" + (op - 0xD4));
+                break;
+            default:
+                print(src);
+                throw new Error("not implemented: " + Number(op).toString(16));
+            }
+        }
+        print(src);
+    }
+    resolve();
+    var method = methods[scripts[0].init];
+    var body = method.body;
+    compileBody(body);
+}
+
+var bytes = snarf("tests/bitops-bits-in-byte.abc", "binary");
+var abc = parseAbcFile(new Stream(bytes));
+compileAbc(abc);
