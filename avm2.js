@@ -451,32 +451,49 @@ function compileAbc(abc) {
         var localCount = body.localCount;
         var src = "";
 
-        src += "function (";
+        src += "function (scopeChain,";
         for (var i = 0; i < localCount; ++i)
             src += ("L" + i + ((i + 1 < localCount) ? "," : ""));
         src += ") {\n";
-        src += "var ";
+        src += "var "; // temporary
         for (var i = 0; i < maxStack; ++i)
             src += ("S" + i + ((i + 1 < maxStack) ? "," : ""));
         src += ";\n";
 
-        var sp = 0;
-        function push(def) {
-            src += ("S" + (sp++) + "=" + def + ";\n");
+        function local(n) {
+            return "L" + n;
         }
-        function pop(use) {
-            src += (use + "=S" + (--sp) + ";\n");
+
+        var sp = 0;
+        function push() {
+            return "S" + (sp++);
+        }
+        function pop() {
+            return "S" + (--sp);
+        }
+
+        function emit(code) {
+            src += code;
+            src += ";\n";
+        }
+
+        function assign(lval, rval) {
+            emit(lval + "=" + rval);
         }
 
         var stream = new Stream(body.code);
         while (stream.remaining() > 0) {
             var op = stream.readU8();
             switch (op) {
+            case 0x30: // pushscope
+                emit("scopeChain.push(nullcheck(" + pop() + "))");
+                break;
+            case 0x40: // 
             case 0xD0: case 0xD1: case 0xD2: case 0xD3: // getlocalX
-                push("L" + (op - 0xD0));
+                assign(push(), local(op - 0xD0));
                 break;
             case 0xD4: case 0xD5: case 0xD6: case 0xD7: // setlocalX
-                pop("L" + (op - 0xD4));
+                assign(local(op - 0xD4), pop());
                 break;
             default:
                 print(src);
