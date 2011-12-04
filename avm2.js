@@ -448,7 +448,7 @@ function compileAbc(abc) {
         var localCount = body.localCount;
         var src = "";
 
-        src += "function f(ctx,index,";
+        src += "function f(ctx,";
         for (var i = 0; i < localCount; ++i)
             src += ("L" + i + ((i + 1 < localCount) ? "," : ""));
         src += ") {\n";
@@ -701,7 +701,7 @@ function compileAbc(abc) {
                 assign(local(obj), "ctx.hasnext2_obj");
                 break;
             case 0x40: // newfunction
-                assign(push(), "clone(" + stream.readU30() + ")");
+                assign(push(), "ctx.clone(" + stream.readU30() + ")");
                 break;
             case 0x41: // call
                 var argc = stream.readU30();
