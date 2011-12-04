@@ -215,7 +215,7 @@ function parseAbcFile(b) {
             var count = b.readU30();
             var nss = [];
             for (var j = 0; j < count; ++j)
-                nss.push(b.readU30());
+                nss.push(ns[b.readU30()]);
             nsset.push(nss);
         }
 
@@ -245,47 +245,47 @@ function parseAbcFile(b) {
         return { int32: int32, uint32: uint32, float64: float64, strings: strings,
                  names: names, ns: ns };
     }
-    function parseMethodInfo(b) {
-        var paramcount = b.readU32();
-        var returntype = b.readU32();
+    function parseMethodInfo(constants, b) {
+        var paramcount = b.readU30();
+        var returntype = b.readU30();
         var params = [];
         for (var i = 0; i < paramcount; ++i)
-            params.push(b.readU32());
+            params.push(b.readU30());
 
-        var name = b.readU32();
+        var name = constants.strings[b.readU30()];
         var flags = b.readU8();
 
         var optionalcount = 0;
         var optionals = null;
         if (flags & METHOD_HasOptional) {
-            optionalcount = b.readU32();
+            optionalcount = b.readU30();
             optionals = [];
             for (var i = 0; i < optionalcount; ++i)
-                optionals[i] = { val: b.readU32(), kind:b.readU8() };
+                optionals[i] = { val: b.readU30(), kind:b.readU8() };
         }
 
         var paramnames = null;
         if (flags & METHOD_HasParamNames) {
             paramnames = [];
             for (var i = 0; i < paramcount; ++i)
-                paramnames[i] = b.readU32();
+                paramnames[i] = constants.strings[b.readU30()];
         }
 
         return { name: name, params: params, returntype: returntype, flags: flags,
                  optionals: optionals, paramnames: paramnames };
     }
     function parseMetadataInfo(b) {
-        var name = b.readU32();
-        var itemcount = b.readU32();
+        var name = b.readU30();
+        var itemcount = b.readU30();
 
         var items = [];
         for (var i = 0; i < itemcount; ++i)
-            items[i] = { key: readU32(), value: readU32() };
+            items[i] = { key: readU30(), value: readU30() };
 
         return { name: name, items: items };
     }
     function parseTrait(b) {
-        var name = b.readU32();
+        var name = b.readU30();
         var tag = b.readU8();
         var kind = tag & 0x0F;
         var attrs = (tag>>4) & 0x0F;
@@ -294,9 +294,9 @@ function parseAbcFile(b) {
         switch (kind) {
         case TRAIT_Slot:
         case TRAIT_Const:
-            var slotid = b.readU32();
-            var typename = b.readU32();
-            var value = b.readU32();
+            var slotid = b.readU30();
+            var typename = b.readU30();
+            var value = b.readU30();
             var kind = null;
             if (value != 0)
                 kind = b.readU8();
@@ -306,53 +306,53 @@ function parseAbcFile(b) {
         case TRAIT_Method:
         case TRAIT_Setter:
         case TRAIT_Getter:
-            var dispid = b.readU32();
-            var methinfo = b.readU32();
+            var dispid = b.readU30();
+            var methinfo = b.readU30();
             trait = { name: name, attrs: attrs, kind: kind, dispid: dispid,
                       methinfo: methinfo };
             break;
         case TRAIT_Class:
-            var slotid = b.readU32();
-            var classinfo = b.readU32();
+            var slotid = b.readU30();
+            var classinfo = b.readU30();
             trait = { name: name, attrs: attrs, kind: kind, slotid: slotid,
                       classinfo: classinfo };
             break;
         case TRAIT_Function: // TODO
-            b.readU32();
-            b.readU32();
+            b.readU30();
+            b.readU30();
             break;
         }
 
         if (attrs & ATTR_Metadata) {
             var metadata = [];
-            var metadatacount = b.readU32();
+            var metadatacount = b.readU30();
             for (var i = 0; i < metadatacount; ++i)
-                metadata.push(b.readU32());
+                metadata.push(b.readU30());
             trait.metadata = metadata;
         }
 
         return trait;
     }
     function parseTraits(b, target) {
-        var traitcount = b.readU32();
+        var traitcount = b.readU30();
         var traits = [];
         for (var i = 0; i < traitcount; ++i)
             traits.push(parseTrait(b));
         target.traits = traits;
     }
     function parseInstanceInfo(b) {
-        var name = b.readU32();
-        var superclass = b.readU32();
+        var name = b.readU30();
+        var superclass = b.readU30();
         var flags = b.readU8();
         var protectedNS = 0;
         if (flags & 8)
-            protectedNS = b.readU32();
+            protectedNS = b.readU30();
 
-        var interfacecount = b.readU32();
+        var interfacecount = b.readU30();
         var interfaces = [];
         for (var i = 0; i < interfacecount; ++i)
-            interfaces[i] = b.readU32();
-        var iinit = b.readU32();
+            interfaces[i] = b.readU30();
+        var iinit = b.readU30();
         var instance_info = { name: name, superclass: superclass, flags: flags,
                               protectedNS: protectedNS, interfaces: interfaces,
                               iinit: iinit };
@@ -360,32 +360,32 @@ function parseAbcFile(b) {
         return instance_info;
     }
     function parseClassInfo(b) {
-        var cinit = b.readU32();
+        var cinit = b.readU30();
         var class_info = { cinit: cinit };
         parseTraits(b, class_info);
         return class_info;
     }
     function parseScriptInfo(b) {
-        var script = { init: b.readU32() };
+        var script = { init: b.readU30() };
         parseTraits(b, script);
         return script;
     }
     function parseException(b) {
-        return { start: b.readU32(), end: b.readU32(), target: b.readU32(),
-                 typename: b.readU32(), name: b.readU32() };
+        return { start: b.readU30(), end: b.readU30(), target: b.readU30(),
+                 typename: b.readU30(), name: b.readU30() };
     }
-    function parseMethodBody(b) {
-        var mb = { method: b.readU32(), maxStack: b.readU32(), localCount: b.readU32(),
-                   initScopeDepth: b.readU32(), maxScopeDepth: b.readU32() };
+    function parseMethodBody(methods, b) {
+        var mb = { method: methods[b.readU30()], maxStack: b.readU30(), localCount: b.readU30(),
+                   initScopeDepth: b.readU30(), maxScopeDepth: b.readU30() };
 
-        var code_len = b.readU32();
+        var code_len = b.readU30();
         var code = Uint8Array(code_len);
         for (var i = 0; i < code_len; ++i)
             code[i] = b.readU8();
         mb.code = code;
 
         var exceptions = [];
-        var excount = b.readU32();
+        var excount = b.readU30();
         for (var i = 0; i < excount; ++i)
             exceptions = parseException(b);
         mb.exceptions = exceptions;
@@ -406,17 +406,17 @@ function parseAbcFile(b) {
     var i, n;
 
     // MethodInfos
-    n = b.readU32();
+    n = b.readU30();
     for (i = 0; i < n; ++i)
-        methods.push(parseMethodInfo(b));
+        methods.push(parseMethodInfo(constants, b));
 
     // MetaDataInfos
-    n = b.readU32();
+    n = b.readU30();
     for (i = 0; i < n; ++i)
         metadata.push(parseMetadata(b));
 
     // InstanceInfos
-    n = b.readU32();
+    n = b.readU30();
     for (i = 0; i < n; ++i)
         instances.push(parseInstanceInfo(b));
 
@@ -425,28 +425,30 @@ function parseAbcFile(b) {
         classes.push(parseClassInfo(b));
 
     // ScriptInfos
-    n = b.readU32();
+    n = b.readU30();
     for (i = 0; i < n; ++i)
         scripts.push(parseScriptInfo(b));
 
     // MethodBodies
-    n = b.readU32();
+    n = b.readU30();
     for (i = 0; i < n; ++i)
-        methodBodies.push(parseMethodBody(b));
+        methodBodies.push(parseMethodBody(methods, b));
 
     return { constants: constants, methods: methods, metadata: metadata, instances: instances,
              classes: classes, scripts: scripts, methodBodies: methodBodies };
 }
 
 function compileAbc(abc) {
-    var names = abc.names;
+    var constants = abc.constants;
+    var strings = constants.strings;
+    var names = constants.names;
 
     function compileBody(body) {
         var maxStack = body.maxStack;
         var localCount = body.localCount;
         var src = "";
 
-        src += "function (ctx,index,";
+        src += "function f(ctx,index,";
         for (var i = 0; i < localCount; ++i)
             src += ("L" + i + ((i + 1 < localCount) ? "," : ""));
         src += ") {\n";
@@ -483,14 +485,12 @@ function compileAbc(abc) {
         var stream = new Stream(body.code);
         var start = stream.pos;
 
-        function label(l) {
-            return "L" + l;
-        }
         function here() {
             return stream.pos - start;
         }
         function target() {
-            return here() + stream.readS24
+            var offset = stream.readS24();
+            return here() + offset;
         }
         function if1(cond) {
             emit("if (" + cond + pop() + ") { label = " + target() + "; continue again; }");
@@ -528,39 +528,38 @@ function compileAbc(abc) {
             return mn;
         }
 
-        function mangleNS(ns) {
-            return ns.length + ns;
-        }
-
         function mangle(ns, name) {
-            return mangleNS(ns) + name;
+            return ns + "$" + name.replace("$", "_$", "g");
         }
 
-        function propName(mn) {
-            return (mn.ns ? mangleNS(ns) : "ns.length + ns") +
-                   (mn.name ? mn.name : "name");
+        function propName(obj, mn) {
+            if (mn.ns && mn.name)
+                return mangle(mn.ns, mn.name);
+            var ns = mn.ns ? quote(mn.ns) : (mn.nsset ? ("ctx.resolveNSSet(" + obj + "," + mn.idx + ")") : "ns");
+            var name = mn.name ? quote(mn.name) : "name";
+            return "ctx.mangle(" + ns + "," + name + ")";
         }
 
-        function prop(mn) {
-            return (mn.ns && mn.name) ?
-                   "." + mangle(mn.ns, mn.name) :
-                   "[" + propName(mn) + "]";
-        }
-
-        function super(obj) {
-            return "super(" + obj + ")";
+        function prop(obj, mn) {
+            return obj + ((mn.ns && mn.name) ?
+                          "." + mangle(mn.ns, mn.name) :
+                          "[" + propName(obj, mn) + "]");
         }
 
         function call(fun, receiver, args) {
-            return fun + "(" + args.reverse.join(",") + ")";
+            return fun + "(" + args.reverse().join(",") + ")";
         }
 
         function construct(fun, args) {
-            return "new + " + call(fun, "(void 0)", args);
+            return "new " + call(fun, "(void 0)", args);
         }
 
         while (stream.remaining() > 0) {
+            var h = here();
+            if (h)
+                src += "case " + h + ":\n";
             var op = stream.readU8();
+            src += "// " + Number(op).toString(16) + "\n";
             switch (op) {
             case 0x02: // nop
                 break;
@@ -568,22 +567,20 @@ function compileAbc(abc) {
                 emit("throw(" + pop() + ")");
                 break;
             case 0x04: // getsuper
-                var x = prop(multiname());
+                var mn = multiname();
                 var obj = pop();
-                assign(push(), super(obj) + x);
+                assign(push(), prop("ctx.super(" + obj + ")", mn));
                 break;
             case 0x05: // setsuper
-                var value = pop();
-                var x = prop(multiname());
-                assign(super(pop()) + x, val);
+                var val = pop();
+                var mn = multiname();
+                var obj = pop();
+                assign(prop("ctx.super(" + obj + ")", mn), val);
                 break;
             case 0x08: // kill
                 assign(local(stream.readU30()), "(void 0)");
                 break;
             case 0x09: // label
-                var h = here();
-                if (h)
-                    emit("case " + label(h) + ":");
                 break;
             case 0x0c: // ifnlt
                 if2("!", "<");
@@ -598,7 +595,7 @@ function compileAbc(abc) {
                 if2("!", ">=");
                 break;
             case 0x10: // goto
-                goto(target());
+                emit("label = " + target() + "; continue again");
                 break;
             case 0x11: // iftrue
                 if1("!!");
@@ -681,22 +678,22 @@ function compileAbc(abc) {
                 assign(push(), b);
                 break;
             case 0x2c: // pushstring
-                assign(push(), quote(abc.strings[stream.readU30()]));
+                assign(push(), quote(constants.strings[stream.readU30()]));
                 break;
             case 0x2d: // pushint
-                assign(push(), abc.int32[stream.readU30()]);
+                assign(push(), constants.int32[stream.readU30()]);
                 break;
             case 0x2e: // pushuint
-                assign(push(), abc.uint32[stream.readU30()]);
+                assign(push(), constants.uint32[stream.readU30()]);
                 break;
             case 0x2f: // pushdouble
-                assign(push(), abc.doubles[stream.readU30()]);
+                assign(push(), constants.doubles[stream.readU30()]);
                 break;
             case 0x30: // pushscope
                 emit("ctx.pushscope(" + pop() + ")");
                 break;
             case 0x31: // pushnamespace
-                assign(push(), abc.ns[stream.readU30()]);
+                assign(push(), constants.ns[stream.readU30()]);
                 break;
             case 0x32: // hasnext2
                 var obj = stream.readU30(), index = stream.readU30();
@@ -735,7 +732,7 @@ function compileAbc(abc) {
                     break;
                 case 0x45:
                 case 0x46:
-                    var x = super(receiver) + ".methods";
+                    var x = "ctx.super(" + receiver + ")" + ".methods";
                     break;
                 }
                 var x = call(x + "[" + index + "]", receiver, args);
@@ -748,7 +745,7 @@ function compileAbc(abc) {
                 var args = popN(argc);
                 var mn = multiname(index);
                 var obj = pop();
-                var x = call(obj + prop(mn), obj, args);
+                var x = call(prop(obj, mn), obj, args);
                 (op == 0x4f) ? emit(x) : assign(push(), x);
                 break;
             case 0x47: // returnvoid
@@ -761,14 +758,14 @@ function compileAbc(abc) {
                 var argc = stream.readU30();
                 var args = popN(argc);
                 var obj = pop();
-                emit(call(super(obj) + ".constructor", obj, args));
+                emit(call("ctx.super(" + obj + ").constructor", obj, args));
                 break;
             case 0x4a: // constructprop
                 var index = stream.readU30(), argc = stream.readU30();
                 var args = popN(argc);
                 var mn = multiname(index);
                 var obj = pop();
-                assign(push(), construct(obj + pop(mn), args));
+                assign(push(), construct(prop(obj, mn), args));
                 break;
             case 0x55: // newobject
                 var argc = stream.readU30();
@@ -792,7 +789,8 @@ function compileAbc(abc) {
                 break;
             case 0x59: // getdescendants
                 var mn = multiname();
-                assign(push(), "ctx.getdescendants(" + pop() + "," + propName(mn) + ")");
+                var obj = pop();
+                assign(push(), "ctx.getdescendants(" + obj + "," + propName(obj, mn) + ")");
                 break;
             case 0x5a: // newcatch
                 assign(push(), "ctx.newcatch(" + stream.readU30() + ")");
@@ -801,17 +799,17 @@ function compileAbc(abc) {
             case 0x5e: // findproperty
                 var mn = multiname();
                 var helper = (op == 0x5d) ? "findpropstrict" : "findproperty";
-                assign(push(), "ctx." + helper + "(" + propName(mn) + ")");
+                assign(push(), "ctx." + helper + "(" + propName("ctx.scope", mn) + ")");
                 break;
             case 0x60: // getlex
                 var mn = multiname();
-                assign(push(), "ctx.scope[ctx.scope.length - 1]" + prop(mn));
+                assign(push(), prop("ctx.scope", mn));
                 break;
             case 0x61: // setproperty
                 var val = pop();
                 var mn = multiname();
                 var obj = pop();
-                assign(obj + prop(mn), val);
+                assign(prop(obj, mn), val);
                 break;
             case 0x62: // getlocal
                 assign(push(), local(stream.readU30()));
@@ -820,34 +818,36 @@ function compileAbc(abc) {
                 assign(local(stream.readU30()), pop());
                 break;
             case 0x64: // getglobalscope
-                assign(push(), "ctx.scope[0]");
+                assign(push(), "ctx.global");
                 break;
             case 0x65: // getscopeobject
-                assign(push(), "ctx.scope[" + stream.readU30() + "]");
+                assign(push(), "ctx.getscopeobject[" + stream.readU30() + "]");
                 break;
             case 0x66: // getproperty
             case 0x67: // initproperty
                 var mn = multiname();
                 var obj = pop();
-                assign(push(), obj + prop(mn));
+                assign(push(), prop(obj, mn));
                 break;
             case 0x6a: // deleteproperty
                 var mn = multiname();
                 var obj = pop();
-                emit("delete " + obj + prop(mn));
+                emit("delete " + prop(obj, mn));
                 break;
             case 0x6c: // getslot
-                assign(push(), pop() + ".slot" + stream.readU30());
+                var obj = pop();
+                assign(push(), obj + ".slot" + stream.readU30());
                 break;
             case 0x6d: // setslot
                 var val = pop();
-                assign(pop() + ".slot" + stream.readU30(), val);
+                var obj = pop();
+                assign(obj + ".slot" + stream.readU30(), val);
                 break;
             case 0x6e: // getglobalslot
-                assign(push(), "ctx.scope[0].slot" + stream.readU30());
+                assign(push(), "ctx.global.slot" + stream.readU30());
                 break;
             case 0x6f: // setglobalslot
-                emit("ctx.scope[0].slot" + stream.readU30(), pop());
+                emit("ctx.global.slot" + stream.readU30(), pop());
                 break;
             case 0x70: // convert_s
             case 0x71: // esc_xelem
@@ -874,16 +874,18 @@ function compileAbc(abc) {
                 break;
             case 0x80: // coerce
                 var val = pop();
-                assign(push(), "ctx.coerce(" + val + "," + quote(propName(multiname())) + ")");
+                var mn = multiname();
+                assign(push(), "ctx.coerce(" + val + "," + quote(propName(null, mn)) + ")");
                 break;
             case 0x82: // coerce_a
                 break;
             case 0x85: // coerce_s
-                unary("($1 == null || $1 == undefined) ? null : ("" + $1)");
+                unary("($1 == null || $1 == undefined) ? null : (\"\" + $1)");
                 break;
             case 0x86: // astype
                 var val = pop();
-                assign(push(), "ctx.astype(" + val + "," + quote(propName(multiname())) + ")");
+                var mn = multiname();
+                assign(push(), "ctx.astype(" + val + "," + quote(propName(null, mn)) + ")");
                 break;
             case 0x87: // astypelate
                 var type = pop();
@@ -966,7 +968,8 @@ function compileAbc(abc) {
                 binary("$1 instanceof $2");
                 break;
             case 0xb2: // istype
-                unary("ctx.istype($1," + quote(propName(multiname())) + ")");
+                var mn = multiname();
+                unary("ctx.istype($1," + quote(propName(null, mn)) + ")");
                 break;
             case 0xb3: // istypelate
                 var type = pop();
@@ -1026,43 +1029,26 @@ function compileAbc(abc) {
                 throw new Error("not implemented: " + Number(op).toString(16));
             }
         }
-        src += "}\n";
+        src += "}\n}\n";
+        print(src);
         return src;
     }
 
-    // We compile methods lazily as they are invoked. Initially the method array contains only
-    // a stub function.
-    var methods = [];
-
-    function compile(index) {
-        return methods[index] = compileBody(abc.methods[index].body);
-    }
-    function stub(ctx, index) {
-        return compile(index).apply(this, arguments);
-    }
-
-    var length = abc.methods.length;
+    // Compile all method bodies
+    var methodBodies = abc.methodBodies;
+    var length = methodBodies.length;
     for (var n = 0; n < length; ++n)
-        methods[n] = stub;
+        methodBodies[n].compiled = Function(compileBody(methodBodies[n]));
 
-    // When cloning a function, we have to make sure it has actually been compiled already.
-    function clone(index) {
-        var fun = methods[index];
-        if (fun == stub)
-            fun = compile(index);
-        return fun;
-    }
-
-    function compile(method) {
-        if (method.src)
-            return Function(src);
-        return method.src = compileBody(method.body);
-    }
-
-    resolve();
-    compile(methods[scripts[0].init]);
+    //compile(methods[scripts[0].init]);
+    return abc;
 }
 
-var bytes = snarf("tests/bitops-bits-in-byte.abc", "binary");
-var abc = parseAbcFile(new Stream(bytes));
-compileAbc(abc);
+try {
+    var bytes = snarf("tests/bitops-bits-in-byte.abc", "binary");
+    var abc = parseAbcFile(new Stream(bytes));
+    compileAbc(abc);
+} catch (e) {
+    print(e);
+    print(e.stack);
+}
